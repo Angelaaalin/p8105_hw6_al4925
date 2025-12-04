@@ -9,22 +9,182 @@ output: github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+```{r}
+library(tidyverse)
+library(modelr)
+library(ggplot2)
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
 ```
 
-## Including Plots
+### Problem 1
 
-You can also embed plots, for example:
+```{r}
+df = read_csv("homicide-data.csv") |> 
+  janitor::clean_names() |>
+  mutate(city_state = paste(city, state, sep = ", "),
+         solved = ifelse(disposition == "Closed by arrest", 1, 0),
+         victim_age = as.numeric(victim_age)) |>
+  filter(!city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, AL"),
+         victim_race %in% c("White", "Black"))
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+md_df = df |>
+  filter(city_state == "Baltimore, MD")
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+fit_md = glm(solved ~ victim_age + victim_sex + victim_race,
+  data = md_df,
+  family = binomial())
+
+fit_md |> 
+  broom::tidy() |>
+  mutate(OR = exp(estimate)) |>
+  select(term, log_OR = estimate, OR, p.value) |> 
+  knitr::kable(digits = 3)
+```
+
+```{r}
+nest_city_df = df |>
+  group_by(city_state) |>
+  nest() |>
+  mutate(fit = purrr::map(data,
+      ~ glm(
+        solved ~ victim_age + victim_sex + victim_race,
+        data = .x,
+        family = binomial())), 
+      tidy_fit = purrr::map(
+      fit,
+      ~ broom::tidy(.x, conf.int = TRUE, exponentiate = TRUE)
+    )
+  ) |>
+  select(city_state, tidy_fit) |>
+  unnest(tidy_fit) |>
+   filter(term == "victim_sexMale") |>
+  transmute(
+    city_state,
+    OR = estimate,
+    CI_low = conf.low,
+    CI_high = conf.high,
+    p.value
+  )
+
+ggplot(nest_city_df, aes(x = city_state, y = OR)) +
+  geom_point() +
+  coord_flip() +
+  geom_errorbar(aes(ymin = CI_low, ymax = CI_high)) +
+  labs(
+    x = "City",
+    y = "Adjusted Odds Ratio (Male vs Female)",
+    title = "Adjusted Odds of Homicide Being Solved by City"
+  )       
+  
+```
+
+The plot shows substantial variation in the adjusted odds ratio for solving homicides comparing male to female victims across cities. In some cities, the OR is above 1, indicating that homicides involving male victims are more likely to be solved after adjusting for age and race. In others, the OR is below 1, suggesting relatively higher solve rates for cases involving female victims. The cities with wider CIs likely have fewer cases (smaller sample sizes), resulting in greater uncertainty.
+
+
+### Problem 2
+```{r}
+library(p8105.datasets)
+data("weather_df")
+```
+
+```{r}
+weather = weather_df |>
+  select(tmax, tmin, prcp) |>
+  drop_na()
+
+boot_est = function(df) {
+   fit = lm(tmax ~ tmin + prcp, data = df)
+   r2 = broom::glance(fit)$r.squared
+   coefs = broom::tidy(fit)
+   b1 = coefs$estimate[coefs$term == "tmin"]
+   b2 = coefs$estimate[coefs$term == "prcp"]
+   ratio = b1 / b2
+   tibble(
+    r2 = r2,
+    beta_ratio = ratio
+  )
+}
+
+set.seed(1)
+
+boot_straps =
+  tibble(id = 1:5000) |>
+  mutate(
+    strap = map(id, ~ sample_frac(weather, replace = TRUE))
+  )
+
+bootstrap_results =
+  boot_straps |>
+  mutate(
+    estimates = map(strap, boot_est)
+  ) |>
+  select(-strap) |>
+  unnest(estimates)
+
+bootstrap_results |>
+  ggplot(aes(x = r2)) +
+  geom_histogram() +
+  labs(
+    title = "Bootstrap Distribution of R Square",
+    x = "R2",
+    y = "Count"
+  )
+
+bootstrap_results |>
+  ggplot(aes(x = beta_ratio)) +
+  geom_histogram() +
+  labs(
+    title = "Bootstrap Distribution of B1/B2",
+    x = "B1/B2",
+    y = "Count"
+  )
+
+bootstrap_results |>
+  summarize(
+    r2_lower = quantile(r2, 0.025),
+    r2_upper = quantile(r2, 0.975),
+    beta_lower = quantile(beta_ratio, 0.025),
+    beta_upper = quantile(beta_ratio, 0.975)
+  )
+```
+
+### Problem 3
+```{r}
+birthweight <- read_csv("birthweight.csv") |>
+  janitor::clean_names() |>
+  mutate(
+    babysex = factor(babysex, levels = c(1, 2), labels = c("male", "female")),
+    malform = factor(malform, levels = c(0, 1), labels = c("absent", "present")),
+    mrace   = factor(mrace),
+    frace   = factor(frace)
+  )
+```
+
+```{r}
+bwt_model = lm(bwt ~ bhead + blength + gaweeks + ppbmi + wtgain +
+         smoken + momage + fincome + babysex + mrace, data = birthweight)
+
+birthweight |>
+  add_predictions(bwt_model) |>
+  add_residuals(bwt_model) |>
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point() +
+  geom_smooth(se = FALSE) +
+  labs(
+    x = "Fitted values",
+    y = "Residuals",
+    title = "Residuals vs Fitted values for birthweight model"
+  )
+```
+
+```{r}
+bwt_model_len_age =
+  lm(bwt ~ blength + gaweeks, data = birthweight)
+bw_model_head_len_sex =
+  lm(bwt ~ bhead * blength * babysex, data = birthweight)
+
+```
+
