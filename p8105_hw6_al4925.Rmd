@@ -2,7 +2,10 @@
 title: "p8105_hw6_al4925"
 author: "Angela Lin"
 date: "2025-12-03"
-output: github_document
+output:
+  pdf_document:
+    latex_engine: xelatex
+  github_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -163,6 +166,9 @@ birthweight <- read_csv("birthweight.csv") |>
   )
 ```
 
+I began by cleaning the dataset and converting several categorical variables into factors, such as the baby’s sex (babysex), the presence of malformations (malform), and parental race (mrace, frace). After confirming that the dataset contained no missing values, I selected a set of predictors based on both clinical intuition and prior knowledge of factors known to influence fetal growth.
+
+
 ```{r}
 bwt_model = lm(bwt ~ bhead + blength + gaweeks + ppbmi + wtgain +
          smoken + momage + fincome + babysex + mrace, data = birthweight)
@@ -179,6 +185,10 @@ birthweight |>
     title = "Residuals vs Fitted values for birthweight model"
   )
 ```
+
+My proposed model includes the every variables as my predictors. This combination reflects a biologically plausible structure: infant size, gestational duration, and maternal physiological characteristics are direct determinants of birthweight, while smoking, income, and demographic factors play indirect but well-documented roles. After fitting the model, I evaluated its assumptions by examining a residuals-versus-fitted plot. 
+
+The residuals–versus–fitted plot shows that residuals are generally centered around zero, but there is some curvature at the lower fitted values, where the model tends to underestimate birthweight. Overall, the plot indicates a mostly acceptable fit with some mild nonlinearity at the low end.
 
 ```{r}
 bwt_model_len_age =
@@ -226,9 +236,9 @@ cv_df |>
     x = "Model",
     y = "RMSE (cross-validated)",
     title = "Cross-validated prediction error for birthweight models"
-  ) +
-  theme_minimal()
-
+  ) 
 ```
+
+To assess predictive performance, I compared my model to two alternatives. The cross-validated RMSE results show clear differences in predictive performance across the three models. My proposed multivariable model (“bwt”) has the lowest RMSE values overall, indicating the best out-of-sample predictive accuracy. The simple model using only birth length and gestational age (“len_age”) performs noticeably worse, with higher and more variable RMSE. The interaction model (“int”) performs better than the simple model but still slightly worse than my proposed model, suggesting that although interactions add flexibility, they do not outperform a more comprehensive set of clinically relevant predictors. Overall, the multivariable model provides the best balance of accuracy and stability.
 
 
