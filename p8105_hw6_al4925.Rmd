@@ -154,6 +154,11 @@ bootstrap_results |>
   )
 ```
 
+The bootstrap distribution of $R^2$ is tightly concentrated around 0.94, suggesting that the fitted linear model consistently explains a large proportion of the variation in `tmax`. The 95% bootstrap confidence interval for $R^2$ (0.9345,0.9467) is narrow, indicating that the model’s explanatory power is very stable across resampled datasets.
+
+In contrast, the distribution of the ratio $\frac{\beta_1}{\beta_2}$ is much wider and noticeably skewed. The 95% confidence interval (−274.8,−125.5) reflects substantial variability in this ratio, largely because the precipitation coefficient is small and near zero, which makes the ratio unstable. Overall, $R^2$ is estimated with high precision, while the coefficient ratio shows much greater uncertainty.
+
+
 ### Problem 3
 ```{r}
 birthweight <- read_csv("birthweight.csv") |>
